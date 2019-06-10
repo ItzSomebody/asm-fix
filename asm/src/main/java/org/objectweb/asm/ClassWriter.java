@@ -444,7 +444,7 @@ public class ClassWriter extends ClassVisitor {
     MethodWriter methodWriter = firstMethod;
     while (methodWriter != null) {
       ++methodsCount;
-      size += methodWriter.computeMethodInfoSize();
+      size += methodWriter.computeMethodInfoSize(version & 0xFFFF, version >>> 16);
       methodWriter = (MethodWriter) methodWriter.mv;
     }
     // For ease of reference, we use here the same attribute order as in Section 4.7 of the JVMS.
@@ -562,7 +562,7 @@ public class ClassWriter extends ClassVisitor {
     while (methodWriter != null) {
       hasFrames |= methodWriter.hasFrames();
       hasAsmInstructions |= methodWriter.hasAsmInstructions();
-      methodWriter.putMethodInfo(result);
+      methodWriter.putMethodInfo(result, version & 0xFFFF, version >>> 16);
       methodWriter = (MethodWriter) methodWriter.mv;
     }
     // For ease of reference, we use here the same attribute order as in Section 4.7 of the JVMS.

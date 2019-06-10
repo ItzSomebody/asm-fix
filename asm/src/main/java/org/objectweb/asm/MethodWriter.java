@@ -2069,7 +2069,7 @@ final class MethodWriter extends MethodVisitor {
    *
    * @return the size in bytes of the method_info JVMS structure.
    */
-  int computeMethodInfoSize() {
+  int computeMethodInfoSize(final int majorVersion, final int minorVersion) {
     // If this method_info must be copied from an existing one, the size computation is trivial.
     if (sourceOffset != 0) {
       // sourceLength excludes the first 6 bytes for access_flags, name_index and descriptor_index.
@@ -2086,7 +2086,13 @@ final class MethodWriter extends MethodVisitor {
       symbolTable.addConstantUtf8(Constants.CODE);
       // The Code attribute has 6 header bytes, plus 2, 2, 4 and 2 bytes respectively for max_stack,
       // max_locals, code_length and attributes_count, plus the bytecode and the exception table.
-      size += 16 + code.length + Handler.getExceptionTableSize(firstHandler);
+      //
+      // or if pre-J1, 1, 1, 2, 2
+      if (majorVersion == 45 && minorVersion <= 2) {
+        size += 12 + code.length + Handler.getExceptionTableSize(firstHandler);
+      } else {
+        size += 16 + code.length + Handler.getExceptionTableSize(firstHandler);
+      }
       if (stackMapTableEntries != null) {
         boolean useStackMapTable = symbolTable.getMajorVersion() >= Opcodes.V1_6;
         symbolTable.addConstantUtf8(useStackMapTable ? Constants.STACK_MAP_TABLE : "StackMap");
@@ -2174,7 +2180,7 @@ final class MethodWriter extends MethodVisitor {
    *
    * @param output where the method_info structure must be put.
    */
-  void putMethodInfo(final ByteVector output) {
+  void putMethodInfo(final ByteVector output, int majorVersion, int minorVersion) {
     boolean useSyntheticAttribute = symbolTable.getMajorVersion() < Opcodes.V1_5;
     int mask = useSyntheticAttribute ? Opcodes.ACC_SYNTHETIC : 0;
     output.putShort(accessFlags & ~mask).putShort(nameIndex).putShort(descriptorIndex);
@@ -2232,7 +2238,15 @@ final class MethodWriter extends MethodVisitor {
     if (code.length > 0) {
       // 2, 2, 4 and 2 bytes respectively for max_stack, max_locals, code_length and
       // attributes_count, plus the bytecode and the exception table.
-      int size = 10 + code.length + Handler.getExceptionTableSize(firstHandler);
+      //
+      // or in the case of pre-j1: 1, 1, 2, 2, bytes respectibely
+      int size;
+      if (majorVersion == 45 && minorVersion <= 2) {
+        size = 6 + code.length + Handler.getExceptionTableSize(firstHandler);
+      } else {
+        size = 10 + code.length + Handler.getExceptionTableSize(firstHandler);
+      }
+
       int codeAttributeCount = 0;
       if (stackMapTableEntries != null) {
         // 6 header bytes and 2 bytes for number_of_entries.
@@ -2272,13 +2286,23 @@ final class MethodWriter extends MethodVisitor {
                 symbolTable, code.data, code.length, maxStack, maxLocals);
         codeAttributeCount += firstCodeAttribute.getAttributeCount();
       }
-      output
-          .putShort(symbolTable.addConstantUtf8(Constants.CODE))
-          .putInt(size)
-          .putShort(maxStack)
-          .putShort(maxLocals)
-          .putInt(code.length)
-          .putByteArray(code.data, 0, code.length);
+      if (majorVersion == 45 && minorVersion <= 2) {
+        output
+            .putShort(symbolTable.addConstantUtf8(Constants.CODE))
+            .putInt(size)
+            .putByte(maxStack)
+            .putByte(maxLocals)
+            .putShort(code.length)
+            .putByteArray(code.data, 0, code.length);
+      } else {
+        output
+            .putShort(symbolTable.addConstantUtf8(Constants.CODE))
+            .putInt(size)
+            .putShort(maxStack)
+            .putShort(maxLocals)
+            .putInt(code.length)
+            .putByteArray(code.data, 0, code.length);
+      }
       Handler.putExceptionTable(firstHandler, output);
       output.putShort(codeAttributeCount);
       if (stackMapTableEntries != null) {
